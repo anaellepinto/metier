@@ -204,7 +204,11 @@ def main():
         token = obtenir_token()
     except requests.RequestException as e:
         # Sortie en erreur, mais le workflow continue : le résumé se refait sur la dernière extraction.
-        sys.exit(f"Connexion à l'API France Travail impossible : {e}")
+        # La réponse du serveur dit pourquoi (invalid_client : identifiants refusés ; invalid_scope :
+        # l'application n'est pas abonnée à l'API « Offres d'emploi v2 »). Elle ne contient aucun secret.
+        reponse = getattr(e, "response", None)
+        detail = (reponse.text or "")[:300] if reponse is not None else ""
+        sys.exit(f"Connexion à l'API France Travail impossible : {e}" + (f" — réponse du serveur : {detail}" if detail else ""))
     print("Connexion à l'API France Travail : OK")
     if args.verifier:
         return
