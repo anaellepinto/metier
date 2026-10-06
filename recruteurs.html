@@ -6,7 +6,7 @@
 <title>Qui recrute ? — les métiers du marketing</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-<link rel="stylesheet" href="assets/commun.css?v=7">
+<link rel="stylesheet" href="assets/commun.css?v=8">
 </head>
 <body>
 <main>
@@ -17,14 +17,14 @@
   <div id="filtres-ici"></div>
 
   <div class="grille" style="margin-top:24px">
-    <div class="carte"><h3><span id="t-entreprises">Entreprises qui publient le plus</span> <small>— les 10 premiers annonceurs, en nombre d'offres</small></h3>
+    <div class="carte"><h3><span id="t-entreprises">Les 10 entreprises qui publient le plus d'offres</span> <small>— en nombre d'offres</small></h3>
       <div class="cles"><span><i style="background:#f4a3cb"></i>employeur qui recrute pour lui-même</span><span><i style="background:#b4b4bc"></i>surtout de l'indépendant, de l'intérim ou du placement</span></div>
       <div class="zone"><canvas id="g-entreprises"></canvas></div>
       <p class="note">Le gris est déduit des annonces elles-mêmes : plus de la moitié de celles de l'annonceur sont en franchise, profession libérale ou commerciale, en intérim, ou déclarées dans le secteur de l'intérim et du placement. La donnée ne dit pas si un annonceur est une école ou une plateforme.</p>
       <p class="src" id="s-entreprises"></p></div>
-    <div class="carte"><h3><span id="t-secteurs">Secteurs d'activité</span> <small id="sous-secteurs">— part des offres qui précisent un secteur</small></h3>
+    <div class="carte"><h3><span id="t-secteurs">Répartition des offres par secteur d'activité</span> <small id="sous-secteurs">— part des offres qui précisent un secteur</small></h3>
       <div class="zone"><canvas id="g-secteurs"></canvas></div><p class="src" id="s-secteurs"></p></div>
-    <div class="carte large"><h3><span id="t-juniors">Qui recrute des débutants ?</span> <small id="sous-juniors">— les employeurs qui publient le plus d'offres ouvertes à quelqu'un sans expérience</small></h3>
+    <div class="carte large"><h3><span id="t-juniors">Les employeurs qui recrutent le plus de débutants</span> <small id="sous-juniors">— les employeurs qui publient le plus d'offres ouvertes à quelqu'un sans expérience</small></h3>
       <div class="cles"><span><i style="background:#e0197d"></i>employeur qui recrute pour lui-même</span><span><i style="background:#b4b4bc"></i>surtout de l'indépendant, de l'intérim ou du placement</span></div>
       <div class="zone"><canvas id="g-juniors"></canvas></div>
       <p class="note">Ce sont les premiers noms à qui écrire quand on sort de formation. « Alternance » à côté d'un nom : cet annonceur ne publie presque que des contrats en alternance — c'est une autre démarche qu'une candidature à un premier emploi, et ce peut être une école qui recrute pour le compte d'entreprises.</p>
@@ -38,7 +38,7 @@
   <footer id="pied"></footer>
 </main>
 
-<script src="assets/commun.js?v=7"></script>
+<script src="assets/commun.js?v=8"></script>
 <script>
 /* ============ Qui recrute ============ */
 function rendre(offres, D) {
@@ -53,9 +53,6 @@ function rendre(offres, D) {
   const ent = compter(nommees, o => o.entreprise).slice(0, 10).map(([nom, v]) => ({ nom, v, profil: profilAnnonceur(lotDe(nommees, nom)) }));
   barres("g-entreprises", ent.map(x => enLignes(joliNom(x.nom), nomEtroit)), ent.map(x => x.v),
     { teinte: ent.map(x => estIntermediaire(x.profil) ? GRIS : ROSE_PALE), marge: 48 });
-  if (ent.length >= 4) { const tete = ent.slice(0, 4), inter = tete.filter(x => estIntermediaire(x.profil)).length;
-    titre("t-entreprises", `Les 4 premiers annonceurs publient ${pct(tete.reduce((t, x) => t + x.v, 0), n)} % des offres`
-      + (inter ? ` ; ${inter === 1 ? "l'un d'eux propose" : inter + " d'entre eux proposent"} surtout de l'indépendant ou de l'intérim` : "")); }
   source("s-entreprises", nommees, "offres qui nomment l'employeur");
 
   /* ---- Secteurs : en part des offres qui en déclarent un ; intérim et placement fusionnés, en gris. ---- */
@@ -66,9 +63,6 @@ function rendre(offres, D) {
   barres("g-secteurs", sec.map(x => enLignes(x[0], ETROIT() ? 18 : 24)), sec.map(x => x[1]),
     { teinte: sec.map(x => x[0] === "Intérim et placement" ? GRIS : couleur), texte: v => `${pct(v, avecSecteur.length)} %  (${nombre(v)})`, marge: 92 });
   document.getElementById("sous-secteurs").textContent = `— part des ${pluriel(avecSecteur.length)} qui précisent un secteur (${pct(avecSecteur.length, n)} % de la sélection)`;
-  if (sec.length) titre("t-secteurs", sec[0][0] === "Intérim et placement"
-    ? `Premier « secteur » déclaré : l'intérim et le placement (${pct(sec[0][1], avecSecteur.length)} %), qui masquent les vrais employeurs`
-    : `Premier secteur déclaré : ${sec[0][0]} (${pct(sec[0][1], avecSecteur.length)} %)`);
   source("s-secteurs", avecSecteur, "offres qui précisent un secteur d'activité");
 
   /* ---- Qui recrute des débutants : même règle « débutant accepté » que les autres pages, plus
@@ -82,9 +76,6 @@ function rendre(offres, D) {
     { teinte: top.map(x => estIntermediaire(x.profil) ? GRIS : couleur), marge: 48 });
   document.getElementById("sous-juniors").textContent =
     `— ${pluriel(debs.length)} « débutant accepté » (le même chiffre que sur les autres pages) + ${pluriel(altEnPlus.length)} en alternance qui ne le précise${altEnPlus.length > 1 ? "nt" : ""} pas = ${nombre(juniors.length)} ; ${nombre(ouvertes.length)} nomment leur employeur, voici les huit premiers`;
-  if (top.length) { const direct = top.find(x => x.profil === "direct");
-    titre("t-juniors", `Premier recruteur de débutants : ${joliNom(top[0].nom)} (${pluriel(top[0].v)}${top[0].profil === "alt" ? ", uniquement en alternance" : ""})`
-      + (direct && direct !== top[0] ? ` ; hors alternance et intermédiaires, c'est ${joliNom(direct.nom)} (${nombre(direct.v)})` : "")); }
   source("s-juniors", ouvertes, "offres ouvertes aux débutants qui nomment l'employeur");
 
   /* ---- Dernières offres ---- */

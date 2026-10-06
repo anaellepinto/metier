@@ -123,3 +123,5 @@ a.lien span i { font-style:normal; color:var(--accent); font-weight:600; }
 .chaleur th[scope=row] { text-align:left; font-weight:400; white-space:nowrap; padding-right:12px; }
 .chaleur td { text-align:center; padding:6px 4px; border-radius:5px; min-width:64px; font-variant-numeric:tabular-nums; }
 @media (max-width:560px) { .chaleur { font-size:.74rem; border-spacing:2px; } .chaleur td { min-width:38px; padding:6px 1px; } .chaleur th { padding:4px 2px; } .chaleur th[scope=row] { white-space:normal; padding-right:4px; } }
+/* Bandeau d'alerte sous le titre : une source n'a pas été collectée depuis plusieurs jours. */
+.alerte { display:block; margin-top:8px; padding:8px 12px; border-radius:8px; background:#fff4e5; color:#8a4b00; font-weight:600; }

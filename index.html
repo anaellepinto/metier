@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-<link rel="stylesheet" href="assets/commun.css?v=7">
+<link rel="stylesheet" href="assets/commun.css?v=8">
 </head>
 <body>
 <main>
@@ -27,7 +27,7 @@
 
   <!-- ============ 3. OÙ SONT LES OFFRES ============ -->
   <h2>Où sont les offres</h2>
-  <div class="carte large"><h3>Chaque point est une offre — survolez pour la lire, cliquez pour l'ouvrir</h3>
+  <div class="carte large"><h3>Carte des offres d'emploi <small>— chaque point est une offre : survolez pour la lire, cliquez pour l'ouvrir</small></h3>
     <div class="carte-outils">
       <button data-vue="france">France</button>
       <button data-vue="clermont">Clermont</button>
@@ -40,9 +40,9 @@
     <div id="map"></div>
     <p class="note" id="note-carte"></p></div>
   <div class="grille" style="margin-top:16px">
-    <div class="carte"><h3><span id="t-departements">Par département</span> <small>— les 15 premiers départements, en nombre d'offres ; le Puy-de-Dôme est toujours affiché, avec son rang</small></h3>
+    <div class="carte"><h3><span id="t-departements">Nombre d'offres par département</span> <small>— les 15 premiers départements, en nombre d'offres ; le Puy-de-Dôme est toujours affiché, avec son rang</small></h3>
       <div class="zone"><canvas id="g-departements"></canvas></div><p class="src" id="s-departements"></p></div>
-    <div class="carte"><h3><span id="t-contrats">Par type de contrat</span> <small>— part des offres sélectionnées, mêmes familles que le filtre</small></h3>
+    <div class="carte"><h3><span id="t-contrats">Répartition des offres par type de contrat</span> <small>— part des offres sélectionnées, mêmes familles que le filtre</small></h3>
       <div class="zone"><canvas id="g-contrats"></canvas></div>
       <p class="note">En gris, « Indépendant » : franchise, profession libérale ou commerciale. Ce ne sont pas des emplois salariés, il s'agit de travailler à son compte.</p>
       <p class="src" id="s-contrats"></p></div>
@@ -60,7 +60,7 @@
   <footer id="pied"></footer>
 </main>
 
-<script src="assets/commun.js?v=7"></script>
+<script src="assets/commun.js?v=8"></script>
 <script>
 /* ============ Accueil : chiffres, carte, départements, contrats ============ */
 let carte, calque;
@@ -112,9 +112,6 @@ function rendre(offres, D) {
   const ACCENT = "#7a0f45", rangFr = r => r === 0 ? "1er" : (r + 1) + "e";
   barres("g-departements", deps.map(x => libDep(x[0]) + (x[0] === "63" ? ` — ${rangFr(rang63)}` : "")), deps.map(x => x[1]),
     { teinte: deps.map(x => x[0] === "63" ? ACCENT : couleur), parBarre: 24, marge: 56 });
-  const places2 = tousDeps.reduce((t, x) => t + x[1], 0);
-  if (deps.length) titre("t-departements", `${libDep(deps[0][0]).replace(/ \(.*/, "")} concentre ${pct(deps[0][1], places2)} % des offres localisées`
-    + (rang63 >= 0 ? ` ; le Puy-de-Dôme en compte ${tousDeps[rang63][1]} (${rangFr(rang63)} département)` : " ; aucune dans le Puy-de-Dôme"));
   source("s-departements", offres.filter(o => depDe(o)), "offres dont le département est connu");
 
   // Contrats : les sept familles du filtre, en part des offres ; « Autre » en dernier, « Indépendant » en gris.
@@ -122,9 +119,6 @@ function rendre(offres, D) {
     .sort((a, b) => (a.k === "autre") - (b.k === "autre") || b.v - a.v);
   barres("g-contrats", fam.map(x => x.l), fam.map(x => x.v),
     { teinte: fam.map(x => x.k === "indep" || x.k === "autre" ? GRIS : couleur), texte: v => `${pct(v, n)} %  (${nombre(v)})`, marge: 104 });
-  const salaries = fam.filter(x => x.k !== "indep" && x.k !== "autre").slice(0, 2), indep = fam.find(x => x.k === "indep");
-  if (salaries.length) titre("t-contrats", salaries.map(x => `${pct(x.v, n)} % ${x.k === "alt" ? "d'alternance" : x.k === "mis" ? "d'intérim" : "de " + x.l.replace("Stage", "stages")}`).join(", ")
-    + (indep && pct(indep.v, n) >= 5 ? ` — et ${pct(indep.v, n)} % d'offres qui ne sont pas des emplois salariés` : ""));
   source("s-contrats", offres);
 
   /* ---- Le chiffre-clé de chaque page ---- */

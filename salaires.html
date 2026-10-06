@@ -6,7 +6,7 @@
 <title>Rémunération — les métiers du marketing</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-<link rel="stylesheet" href="assets/commun.css?v=7">
+<link rel="stylesheet" href="assets/commun.css?v=8">
 </head>
 <body>
 <main>
@@ -25,16 +25,18 @@
   <section id="volet-emplois">
     <div class="phrase" id="phrase-salaire" style="margin-top:16px">—</div>
     <div class="grille" style="margin-top:16px">
-      <div class="carte large"><h3><span id="t-paie-niveau">Selon le niveau de poste</span> <small>— brut annuel, de la médiane des salaires minimum à celle des maximum ; hors stages et alternances</small></h3>
+      <div class="carte large"><h3><span id="t-paie-niveau">Salaire annuel brut selon le niveau de poste</span> <small>— de la médiane des salaires minimum à celle des maximum ; hors stages et alternances</small></h3>
         <div class="zone"><canvas id="g-paie-niveau"></canvas></div><p class="src" id="s-paie-niveau"></p></div>
-      <div class="carte large"><h3><span id="t-paie-metier">Selon le métier</span> <small>— métiers cochés comptant au moins 8 offres avec salaire ; barre pâle : moins de 15 offres, à lire avec prudence</small></h3>
+      <div class="carte large"><h3><span id="t-paie-metier">Salaire annuel brut selon le métier</span> <small>— métiers cochés comptant au moins 8 offres avec salaire ; barre pâle : moins de 15 offres, à lire avec prudence</small></h3>
         <div class="cles" id="cles-paie-metier"></div>
         <div class="zone"><canvas id="g-paie-metier"></canvas></div><p class="src" id="s-paie-metier"></p></div>
-      <div class="carte"><h3><span id="t-paie-contrat">Selon le type de contrat</span> <small>— CDI, CDD et intérim ; même échelle que le graphique voisin</small></h3>
+      <div class="carte"><h3><span id="t-paie-contrat">Salaire annuel brut selon le type de contrat</span> <small>— CDI, CDD et intérim ; de la médiane des salaires minimum à celle des maximum, même échelle que le graphique voisin</small></h3>
         <div class="zone"><canvas id="g-paie-contrat"></canvas></div><p class="src" id="s-paie-contrat"></p></div>
-      <div class="carte"><h3><span id="t-paie-idf">Selon le territoire</span> <small>— Île-de-France et reste de la France</small></h3>
+      <div class="carte"><h3><span id="t-paie-idf">Salaire annuel brut selon le territoire</span> <small>— Île-de-France, Puy-de-Dôme, reste de la France et offres sans lieu précis ; de la médiane des salaires minimum à celle des maximum</small></h3>
         <div class="zone"><canvas id="g-paie-idf"></canvas></div>
-        <p class="annot" id="annot-63"></p><p class="src" id="s-paie-idf"></p></div>
+        <p class="src" id="s-paie-idf"></p></div>
+      <div class="carte large"><h3>Les offres du Puy-de-Dôme qui affichent un salaire <small id="nb-paie-63"></small></h3>
+        <div class="liste" id="liste-paie-63"></div><p class="src" id="s-paie-63"></p></div>
     </div>
     <p class="note" style="margin-top:12px">Ce sont les salaires <b>affichés</b> : moins d'un tiers des annonces en donnent un, plutôt des PME et des postes juniors. Le vrai marché paie sans doute un peu mieux, surtout en haut de l'échelle. Le net mensuel est une estimation (brut × 0,78 / 12, avant impôt sur le revenu).</p>
   </section>
@@ -42,7 +44,7 @@
   <section id="volet-etudes" hidden>
     <div class="chiffres" id="chiffres-etudes" style="margin-top:16px"></div>
     <div class="grille" style="margin-top:16px">
-      <div class="carte large"><h3><span id="t-paie-alt">Alternance : ce que les annonces affichent</span> <small>— brut mensuel ; chaque trait est une offre, du minimum au maximum annoncés. Survolez pour lire l'annonce.</small></h3>
+      <div class="carte large"><h3><span id="t-paie-alt">Rémunération mensuelle brute des offres en alternance</span> <small>— chaque trait est une offre, du minimum au maximum annoncés. Survolez pour lire l'annonce.</small></h3>
         <div class="zone"><canvas id="g-paie-alt"></canvas></div>
         <p class="note" id="note-paie-alt"></p><p class="src" id="s-paie-alt"></p></div>
     </div>
@@ -52,7 +54,7 @@
   <footer id="pied"></footer>
 </main>
 
-<script src="assets/commun.js?v=7"></script>
+<script src="assets/commun.js?v=8"></script>
 <script>
 /* ============ Ce que ça paie ============ */
 let volet = "emplois";
@@ -87,10 +89,6 @@ function rendreEmplois(offres, lib, f) {
     return { k, label: l, n: lot.length, paire: fourchette(lot), teinte: COUL_NIV[k], bord: k === "assistant" ? "#d6589d" : null, faible: lot.length < 20 };
   }).filter(x => x.paire && x.n >= 3);
   flottantes("g-paie-niveau", parNiveau);
-  const A = parNiveau.find(x => x.k === "assistant"), C = parNiveau.find(x => x.k === "charge");
-  titre("t-paie-niveau", A && C
-    ? `Un poste de chargé·e s'affiche à ${plage(...C.paire)} brut, soit ${kilo(Math.abs(C.paire[0] - A.paire[0]))} k€ de ${C.paire[0] >= A.paire[0] ? "plus" : "moins"} qu'un poste junior au plancher`
-    : parNiveau.length ? `${parNiveau[0].label} : ${plage(...parNiveau[0].paire)} brut par an` : "Selon le niveau de poste");
   source("s-paie-niveau", avecSal, avecSalaire);
 
   // b) par métier (au moins 8 offres avec salaire) : couleur du groupe, barre pâle sous 15 offres,
@@ -105,9 +103,6 @@ function rendreEmplois(offres, lib, f) {
   flottantes("g-paie-metier", parMetierSal, { parBarre: etroit ? 72 : 44, repere: med == null ? null : { valeur: med, texte: `médiane de l'ensemble : ${kilo(med)} k€` } });
   document.getElementById("cles-paie-metier").innerHTML = Commun.onglet.groupes.filter(g => parMetierSal.length && [...f.metiers].some(c => Commun.groupeDe[c] === g.nom))
     .map(g => `<span><i style="background:${couleurGroupe(g.nom)}"></i>${g.nom}</span>`).join("");
-  if (parMetierSal.length > 1) { const bas = parMetierSal[0], haut = parMetierSal[parMetierSal.length - 1];
-    titre("t-paie-metier", `Au plancher, de ${kilo(bas.paire[0])} k€ (${bas.nom}) à ${kilo(haut.paire[0])} k€ (${haut.nom})`); }
-  else titre("t-paie-metier", "Selon le métier");
   source("s-paie-metier", avecSal.filter(o => f.metiers.has(o.rome)), avecSalaire);
 
   // c) par type de contrat : CDI, CDD, intérim seulement. d) Île-de-France ou ailleurs. Même échelle pour les deux.
@@ -115,29 +110,32 @@ function rendreEmplois(offres, lib, f) {
     const lot = avecSal.filter(o => familleContrat(o) === k);
     return { k, label: l, n: lot.length, paire: fourchette(lot), faible: lot.length < nFaible };
   }).filter(x => x.paire && x.n >= 3);
-  // Le Puy-de-Dôme compte trop peu d'offres avec salaire pour être dessiné à égalité avec le reste
-  // du pays : il passe en annotation. Il reste compté dans « Reste de la France ».
-  const lot63 = avecSal.filter(o => o.dep === "63"), p63 = fourchette(lot63);
+  // Quatre territoires, sans recouvrement : chaque offre avec salaire tombe dans une seule ligne.
+  // Le Puy-de-Dôme et « Lieu non précisé » sont toujours affichés, même avec très peu d'offres.
+  const lot63 = avecSal.filter(o => o.dep === "63").sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const parLieu = [
     { k: "idf", label: "Île-de-France", lot: avecSal.filter(o => IDF.has(o.dep)) },
-    { k: "reste", label: "Reste de la France", lot: avecSal.filter(o => o.dep && !IDF.has(o.dep)) },
-  ].map(x => ({ k: x.k, label: x.label, n: x.lot.length, paire: fourchette(x.lot), faible: x.lot.length < nFaible })).filter(x => x.paire && x.n >= 3);
+    { k: "pdd", label: "Puy-de-Dôme", lot: lot63, toujours: true },
+    { k: "reste", label: ["Reste de la France", "hors IDF et Puy-de-Dôme"], lot: avecSal.filter(o => o.dep && o.dep !== "63" && !IDF.has(o.dep)) },
+    { k: "inconnu", label: ["Lieu non précisé", "France, région, étranger…"], lot: avecSal.filter(o => !o.dep), toujours: true },
+  ].map(x => ({ k: x.k, label: x.label, n: x.lot.length, paire: fourchette(x.lot), faible: x.lot.length < nFaible, toujours: x.toujours,
+      teinte: x.k === "pdd" ? "#7a0f45" : x.k === "inconnu" ? GRIS : couleur }))
+    .filter(x => x.toujours || (x.paire && x.n >= 3));
   const echelle = bornes([...parContrat, ...parLieu].map(x => x.paire));
   flottantes("g-paie-contrat", parContrat, echelle);
-  flottantes("g-paie-idf", parLieu, echelle);
-  const cdi = parContrat.find(x => x.k === "cdi"), cdd = parContrat.find(x => x.k === "cdd");
-  titre("t-paie-contrat", cdi && cdd
-    ? `Le CDI s'affiche à ${plage(...cdi.paire)}, soit ${kilo(Math.abs(cdi.paire[0] - cdd.paire[0]))} k€ de ${cdi.paire[0] >= cdd.paire[0] ? "plus" : "moins"} que le CDD au plancher`
-    : cdi ? `Le CDI s'affiche à ${plage(...cdi.paire)} brut par an` : "Selon le type de contrat");
-  const idf = parLieu.find(x => x.k === "idf"), reste = parLieu.find(x => x.k === "reste");
-  titre("t-paie-idf", idf && reste
-    ? `L'Île-de-France affiche ${kilo(Math.abs(idf.paire[0] - reste.paire[0]))} k€ de ${idf.paire[0] >= reste.paire[0] ? "plus" : "moins"} que le reste du pays (${plage(...idf.paire)} contre ${plage(...reste.paire)})`
-    : "Selon le territoire");
-  document.getElementById("annot-63").textContent = p63
-    ? `Puy-de-Dôme : ${pluriel(lot63.length)} seulement avec un salaire, ${plage(...p63)} — trop peu pour comparer, à lire avec prudence.`
-    : "Puy-de-Dôme : aucune offre de cette sélection n'affiche de salaire.";
+  flottantes("g-paie-idf", parLieu, Object.assign({ parBarre: etroit ? 72 : 52 }, echelle));
   source("s-paie-contrat", avecSal.filter(o => ["cdi", "cdd", "mis"].includes(familleContrat(o))), "offres affichant un salaire");
-  source("s-paie-idf", avecSal.filter(o => o.dep), "offres affichant un salaire, département connu");
+  source("s-paie-idf", avecSal, "offres affichant un salaire");
+
+  // Les offres du Puy-de-Dôme elles-mêmes : peu nombreuses, on peut toutes les lire.
+  document.getElementById("nb-paie-63").textContent = `— ${pluriel(lot63.length)}, de la plus récente à la plus ancienne`;
+  document.getElementById("liste-paie-63").innerHTML = lot63.length ? lot63.map(o => `<div class="item">
+      <div class="titre">${o.url ? `<a href="${o.url}" target="_blank" rel="noopener">${o.intitule}</a>` : o.intitule}</div>
+      <div class="meta"><span>${o.entreprise || "employeur non précisé"}</span><span>·</span><span>${o.lieu || "lieu non précisé"}</span>
+        <span>·</span><span>${libContratOffre(o)}</span><span>·</span><span class="sal">${salaireCourt(o)}</span>
+        <span>·</span><span>publiée le ${dateFr(o.date)}</span> ${etiqSource(o)}</div></div>`).join("")
+    : `<p class="note">Aucune offre du Puy-de-Dôme n'affiche de salaire dans cette sélection.</p>`;
+  source("s-paie-63", lot63, "offres du Puy-de-Dôme affichant un salaire, hors stages et alternances");
 }
 
 /* Stages et alternances : montants ramenés au mois. Trop peu d'offres pour des médianes par
@@ -171,9 +169,6 @@ function rendreEtudes(offres) {
         scales: { x: { beginAtZero: true, grid: { color: "#eee" }, border: { display: false }, ticks: { color: ENCRE_GRISE, callback: v => nombre(v) + " €" } },
                   y: { display: false } } });
   }
-  titre("t-paie-alt", assez
-    ? `En alternance, l'annonce médiane va de ${euro(mois(fA[0]), 10)} à ${euro(mois(fA[1]), 10)} brut par mois`
-    : "Alternance : trop peu d'offres affichent une rémunération pour en tirer un graphique");
   const sansSal = [...new Set(alt.filter(o => o.smin == null).map(sourceDe))].filter(s => !altSal.some(o => sourceDe(o) === s));
   document.getElementById("note-paie-alt").textContent =
     (assez ? "" : `${pluriel(altSal.length)} seulement : pas de graphique en dessous de cinq. `)

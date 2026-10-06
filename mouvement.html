@@ -6,7 +6,7 @@
 <title>Les évolutions — les métiers du marketing</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-<link rel="stylesheet" href="assets/commun.css?v=7">
+<link rel="stylesheet" href="assets/commun.css?v=8">
 </head>
 <body>
 <main>
@@ -17,11 +17,11 @@
   <div id="filtres-ici"></div>
 
   <div class="grille" style="margin-top:24px">
-    <div class="carte large"><h3><span id="t-serie">Ce qui entre et ce qui sort entre deux extractions</span> <small>— à droite les nouvelles annonces, à gauche celles qui ont quitté le stock, à chaque extraction France Travail</small></h3>
+    <div class="carte large"><h3><span id="t-serie">Nouvelles annonces et annonces retirées à chaque extraction</span> <small>— à droite les nouvelles annonces, à gauche celles qui ont quitté le stock, à chaque extraction France Travail</small></h3>
       <div class="cles"><span><i style="background:#e0197d"></i>nouvelles annonces</span><span><i style="background:#b4b4bc"></i>annonces sorties du stock</span></div>
       <div class="zone"><canvas id="g-serie"></canvas></div>
       <p class="note" id="note-serie"></p><p class="src" id="s-serie"></p></div>
-    <div class="carte large"><h3><span id="t-fraicheur">Fraîcheur des annonces</span> <small>— répartition des offres sélectionnées selon leur ancienneté</small></h3>
+    <div class="carte large"><h3><span id="t-fraicheur">Ancienneté des annonces en ligne</span> <small>— répartition des offres sélectionnées selon leur ancienneté</small></h3>
       <div class="zone"><canvas id="g-fraicheur"></canvas></div>
       <p class="note">Une annonce en ligne depuis plus de trois mois est souvent déjà pourvue, ou republiée en continu par une agence : candidatez d'abord aux fraîches.</p>
       <p class="src" id="s-fraicheur"></p></div>
@@ -41,7 +41,7 @@
   <footer id="pied"></footer>
 </main>
 
-<script src="assets/commun.js?v=7"></script>
+<script src="assets/commun.js?v=8"></script>
 <script>
 /* ============ Le marché bouge ============ */
 /* data/serie.csv : une ligne par métier et par extraction (total, nouvelles). C'est le journal
@@ -79,15 +79,10 @@ function rendre(offres, D) {
           datalabels: { display: true, color: ENCRE, font: { size: 12, weight: 600 }, anchor: c => c.datasetIndex ? "end" : "start", align: c => c.datasetIndex ? "right" : "left", offset: 4, formatter: v => (v > 0 ? "+" : v < 0 ? "−" : "") + nombre(Math.abs(v)) } },
         scales: { x: { stacked: true, display: false, min: -haut, max: haut },
                   y: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { color: ENCRE, font: { size: 12 } } } } });
-    const prem = jours[0], dern = jours[jours.length - 1], ecart = prem.total ? 100 * (dern.total - prem.total) / prem.total : 0;
-    const moy = k => Math.round(flux.reduce((t, x) => t + x[k], 0) / flux.length);
-    titre("t-serie", (Math.abs(ecart) < 3 ? `Le stock reste stable autour de ${nombre(Math.round(dern.total / 10) * 10)} offres`
-        : `Le stock ${ecart > 0 ? "augmente" : "recule"} de ${Math.abs(Math.round(ecart))} %`)
-      + ` : à chaque extraction, environ ${nombre(moy("entrees"))} annonces entrent et ${nombre(moy("sorties"))} sortent`);
+    const prem = jours[0], dern = jours[jours.length - 1];
     document.getElementById("note-serie").textContent =
       `${jours.length} extractions, du ${dateFr(prem.date)} (${nombre(prem.total)} offres) au ${dateFr(dern.date)} (${nombre(dern.total)} offres). Les sorties sont calculées : stock précédent + nouvelles − stock du jour. Deux extractions éloignées de plusieurs jours cumulent les mouvements de l'intervalle. Ce compte suit les métiers cochés, pas les autres filtres, et France Travail seulement.`;
   } else {
-    titre("t-serie", "Ce qui entre et ce qui sort entre deux extractions");
     document.getElementById("note-serie").textContent = "Il faut au moins trois extractions pour lire un renouvellement : la collecte est relancée chaque matin.";
   }
   const e = document.getElementById("s-serie");
@@ -106,7 +101,6 @@ function rendre(offres, D) {
         tooltip: { callbacks: { title: () => "", label: c => `${c.dataset.label} : ${nombre(nb[c.datasetIndex])} offres (${Math.round(c.parsed.x)} %)` } },
         datalabels: { display: c => c.dataset.data[0] >= 6, color: c => c.dataset.encre, font: { size: 13, weight: 600 }, formatter: v => Math.round(v) + " %" } },
       scales: { x: { stacked: true, min: 0, max: 100, display: false }, y: { stacked: true, display: false } } });
-  if (ages.length) titre("t-fraicheur", `${pct(nb[0] + nb[1], tot)} % des annonces ont moins d'un mois ; ${pct(nb[0], tot)} % ont moins de 7 jours`);
   source("s-fraicheur", datees, "offres dont la date de publication est connue");
 }
 

@@ -283,6 +283,19 @@ def departement(lieu):
     return m.group(1) if m else ""
 
 
+def sans_accents(t):
+    """'Île-de-France' -> 'ile de france' : pour comparer deux noms de lieu."""
+    t = unicodedata.normalize("NFKD", (t or "").lower())
+    return " ".join(re.findall(r"[a-z0-9]+", "".join(c for c in t if not unicodedata.combining(c))))
+
+
+# Les régions : jamais un nom de ville, à ne pas chercher comme tel.
+REGIONS = {sans_accents(r) for r in (
+    "Auvergne-Rhône-Alpes", "Bourgogne-Franche-Comté", "Bretagne", "Centre-Val de Loire", "Corse", "Grand Est",
+    "Hauts-de-France", "Île-de-France", "Normandie", "Nouvelle-Aquitaine", "Occitanie", "Pays de la Loire",
+    "Provence-Alpes-Côte d'Azur", "Guadeloupe", "Martinique", "Guyane", "La Réunion", "Mayotte")}
+
+
 class Geocodeur:
     """Centre des communes et villes principales des départements, via geo.api.gouv.fr, avec cache."""
 
@@ -344,6 +357,14 @@ class Geocodeur:
                               if d and d[0].get("centre") else None)
         return self.noms[cle]
 
+    def departement_nomme(self, nom):
+        """'Loire-Atlantique' -> '44' ; None si ce n'est pas exactement un nom de département."""
+        cle = "dep:" + nom.strip().lower()
+        if cle not in self.noms:
+            d = self._get(f"{GEO}/departements?nom={requests.utils.quote(nom)}&limit=1")
+            self.noms[cle] = d[0]["code"] if d and sans_accents(d[0]["nom"]) == sans_accents(nom) else None
+        return self.noms[cle]
+
     def position_libre(self, o):
         """Pour les autres sources : (lat, lon, précision, département) à partir de ce qu'elles donnent
         — coordonnées, code postal, « Lyon (69) » ou seulement un nom de ville."""
@@ -355,9 +376,18 @@ class Geocodeur:
         # Coordonnées et code postal connus (La bonne alternance) : rien à chercher de plus.
         if o.get("lat") is not None and o.get("lon") is not None and dep:
             return o["lat"], o["lon"], "offre", dep
-        nom = re.split(r"[,(]", lieu)[0].strip()
-        nom = re.sub(r"^\d{5}\s+", "", nom)            # « 75001 Paris » -> « Paris »
+        morceaux = [m.strip() for m in re.split(r"[,(]", lieu) if m.strip()]
+        # « 1er Arrondissement, Paris » (Adzuna) : la ville est le morceau suivant.
+        if len(morceaux) > 1 and re.search(r"arrondissement", morceaux[0], re.IGNORECASE):
+            morceaux = morceaux[1:]
+        nom = re.sub(r"^\d{5}\s+", "", morceaux[0] if morceaux else "")   # « 75001 Paris » -> « Paris »
         trouve = self.ville(nom) if nom and nom.lower() not in ("france", "télétravail", "teletravail") else None
+        if not trouve and not dep and nom:
+            # « Loire-Atlantique, Pays de la Loire » : un nom de département ; « La Défense, Courbevoie » :
+            # un quartier, la ville vient ensuite (sauf si c'est une région).
+            dep = self.departement_nomme(nom) or ""
+            if not dep and len(morceaux) > 1 and sans_accents(morceaux[1]) not in REGIONS:
+                trouve = self.ville(morceaux[1])
         if trouve and (not dep or trouve[2] == dep):
             dep = trouve[2]
         if o.get("lat") is not None and o.get("lon") is not None:
@@ -460,7 +490,7 @@ def main():
             "source": o["source"], "partenaire": None,
             "salaire": f"Annuel de {smin} Euros à {smax or smin} Euros" if smin else None,
             "smin": smin, "smax": smax or smin,
-            "date": o.get("date") or jour, "vu_le": jour, "url": o.get("url"),
+            "date": o.get("date") or jour, "vu_le": o.get("collecte") or jour, "url": o.get("url"),
             "outils": [nom for nom, rx in REGEX_OUTILS.items() if rx.search(t)],
             "teletravail": "télétravail" in t,
             "competences": [], "niveau": niveau(o.get("intitule")),
@@ -491,6 +521,9 @@ def main():
                     for i, (t, groupes) in ONGLETS.items()],
         "outils": list(OUTILS),
         "sources": [s for s in SOURCES if any(o["source"] == s for o in offres)],
+        # Dernière collecte de chaque source : le site l'affiche, et signale une source en retard.
+        "collectes": {s: max(o["vu_le"] for o in offres if o["source"] == s) if s != SOURCE_FT else jour
+                      for s in SOURCES if any(o["source"] == s for o in offres)},
         "contrats": {c: contrat_libelle(c)
                      for c in sorted({o["contrat"] for o in offres if o["contrat"]})},
         "niveaux": NIVEAUX_LIBELLES,

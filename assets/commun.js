@@ -129,8 +129,6 @@ function sansRepetitions(offres) {
   });
 }
 
-/* Le titre d'une carte dit ce qu'il faut retenir ; il est recalculé à chaque changement de filtre. */
-function titre(id, texte) { const e = document.getElementById(id); if (e && texte) e.textContent = texte; }
 /* La ligne de source sous chaque graphique : une capture d'écran reste sourcée. */
 const NOM_SOURCE = { "France Travail": "France Travail (API Offres d'emploi v2)" };
 function source(id, lot, precision = "") {
@@ -377,7 +375,7 @@ function poserNavEtFiltres() {
     `<p style="margin:0 0 8px"><a href="mouvement.html#limites">Limites de ces chiffres</a></p>
      Sources : API France Travail (<code>scripts/extraire.py</code>) ; La bonne alternance, Adzuna et Jooble, par leurs API officielles (<code>scripts/autres_sources.py</code>), quand leurs clés sont configurées.<br>
      Chaîne : API France Travail → <code>scripts/extraire.py</code> → <code>data/brut/</code> (chaque version d'annonce, une seule fois) + <code>data/actives/</code> (les offres du jour) → <code>scripts/resumer.py</code> → <code>data/resume.json</code> → ces pages (GitHub Pages).
-     Une Action GitHub relance la collecte chaque matin à 7 h. Identifiants dans les secrets du dépôt, jamais dans le code.
+     Une Action GitHub relance la collecte chaque matin, pour un site à jour à 7 h ; une offre absente de la collecte du jour (expirée, pourvue ou retirée) disparaît du site. Identifiants dans les secrets du dépôt, jamais dans le code.
      Dépôt de démonstration — M2 MOD, IAE Clermont Auvergne, séminaires métiers.`;
 }
 
@@ -528,9 +526,13 @@ const Commun = {
       if (Array.isArray(d.niveaux) && d.niveaux.length) NIVEAUX = d.niveaux.filter(x => Array.isArray(x) && x.length === 2);
       if (Array.isArray(d.formations) && d.formations.length) FORMATIONS = d.formations;
 
+      // Dernière collecte de chaque source ; une source qui a plus de trois jours de retard est signalée.
+      const collectes = Object.entries(d.collectes || { [d.source]: d.date });
+      const enRetard = collectes.filter(([, j]) => (Date.now() - Date.parse(j)) / 86400000 > 3);
       const sous = document.getElementById("sous");
       if (sous) sous.innerHTML =
-        `${d.source} · ${d.requete} · extraction du <b>${dateFr(d.date)}</b> · ${d.offres.length} offres actives, ${d.versions_conservees} versions d'annonces conservées`;
+        `${d.requete} · dernière collecte : ${collectes.map(([s, j]) => `${s} <b>${dateFr(j)}</b>`).join(", ")} · ${d.offres.length} offres actives, ${d.versions_conservees} versions d'annonces conservées`
+        + (enRetard.length ? `<span class="alerte">Attention : ${enRetard.map(([s, j]) => `${s} n'a pas été mis à jour depuis le ${dateFr(j)}`).join(" ; ")}. Des offres affichées peuvent avoir expiré entre-temps.</span>` : "");
 
       // --- Cases des filtres type de contrat et niveau de poste (cochées par poserOnglet) ---
       document.getElementById("f-contrats").innerHTML = CONTRATS.map(([k, l]) =>

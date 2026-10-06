@@ -148,6 +148,10 @@ def la_bonne_alternance(codes):
                 continue
             if offre.get("status") not in (None, "Active"):
                 continue
+            # Une offre dont la date d'expiration est passée n'est plus proposée.
+            expire = ((offre.get("publication") or {}).get("expiration") or "")[:10]
+            if expire and expire < f"{date.today():%Y-%m-%d}":
+                continue
             types = " ".join((j.get("contract") or {}).get("type") or [])
             nat = "professionnalisation" if "rofessionnalisation" in types and "pprentissage" not in types else "apprentissage"
             coords = (lieu.get("geopoint") or {}).get("coordinates") or [None, None]
@@ -304,7 +308,8 @@ def lire(jour, fraicheur=2):
         fichiers = [f for f in sorted((DOSSIER / slug).glob("*.jsonl")) if limite <= f.stem]
         if fichiers:
             with fichiers[-1].open(encoding="utf-8") as fh:
-                offres += [json.loads(l) for l in fh if l.strip()]
+                # « collecte » : le jour où la source a été interrogée (affiché sur le site).
+                offres += [dict(json.loads(l), collecte=fichiers[-1].stem) for l in fh if l.strip()]
     return offres
 
 

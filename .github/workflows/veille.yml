@@ -2,39 +2,104 @@
 # met à jour data/ et le résumé de la page, et enregistre le tout par un commit.
 # Les identifiants sont dans Settings -> Secrets and variables -> Actions (FT_CLIENT_ID, FT_CLIENT_SECRET,
 # et, facultatifs, LBA_API_KEY, ADZUNA_APP_ID, ADZUNA_APP_KEY, JOOBLE_KEY pour les autres sources).
+#
+# Objectif : un site à jour à 7 h, heure de Paris, été comme hiver. Deux obstacles :
+#   - GitHub ne connaît que l'UTC, donc pas le changement d'heure ;
+#   - GitHub retarde les tâches programmées, souvent de plusieurs heures (une tâche demandée à 5 h UTC
+#     part en pratique entre 10 h et 12 h UTC).
+# D'où plusieurs déclenchements dans la nuit : le premier que GitHub libère attend 6 h 35 à Paris
+# puis collecte ; les suivants voient que la veille du jour est faite et s'arrêtent aussitôt.
 name: veille
 
 on:
   schedule:
-    - cron: "0 5 * * *"       # 5 h UTC = 7 h à Paris en été (6 h en hiver) ; GitHub ne connaît que l'UTC
-  workflow_dispatch:          # et le bouton « Run workflow » pour lancer à la main
+    - cron: "17 20 * * *"
+    - cron: "17 22 * * *"
+    - cron: "17 0 * * *"
+    - cron: "17 2 * * *"
+    - cron: "47 3 * * *"
+  workflow_dispatch:          # et le bouton « Run workflow » pour lancer à la main, tout de suite
 
 permissions:
   contents: write             # le workflow doit pouvoir pousser son commit
 
+concurrency:
+  group: veille               # une seule veille à la fois : les autres attendent leur tour
+  cancel-in-progress: false
+
+env:
+  TZ: Europe/Paris            # les dates (fichiers du jour, message de commit) sont celles de Paris
+
 jobs:
   extraire:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04     # version fixée : ubuntu-latest change de version sans prévenir
+    timeout-minutes: 330
     steps:
-      - uses: actions/checkout@v4
+      - name: Attendre 6 h 35, heure de Paris
+        id: heure
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then echo "Lancement manuel : tout de suite."; exit 0; fi
+          maintenant=$(( 10#$(date +%H) * 60 + 10#$(date +%M) ))
+          cible=$(( 6 * 60 + 35 ))
+          if [ "$maintenant" -ge 1080 ] || [ "$maintenant" -lt 155 ]; then
+            # entre 18 h et 2 h 35 : trop tôt pour attendre, un déclenchement suivant s'en chargera
+            echo "Il est $(date +%H:%M) à Paris : trop tôt, on laisse la main au déclenchement suivant."
+            echo "passer=oui" >> "$GITHUB_OUTPUT"
+          elif [ "$maintenant" -lt "$cible" ]; then
+            echo "Il est $(date +%H:%M) à Paris : attente de $(( cible - maintenant )) minutes."
+            sleep $(( (cible - maintenant) * 60 ))
+          else
+            echo "Il est $(date +%H:%M) à Paris : GitHub a libéré la tâche en retard, on collecte tout de suite."
+          fi
 
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+        if: steps.heure.outputs.passer != 'oui'
+        with:
+          fetch-depth: 30     # assez d'historique pour savoir si la veille du jour est déjà enregistrée
+
+      - name: La veille du jour est-elle déjà faite ?
+        id: deja
+        if: steps.heure.outputs.passer != 'oui'
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] && [ -n "$(git log --since=midnight --grep="^veille : offres du $(date +%F)" --format=%h)" ]; then
+            echo "Veille du $(date +%F) déjà enregistrée : rien à refaire."
+            echo "passer=oui" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v7
+        if: steps.heure.outputs.passer != 'oui' && steps.deja.outputs.passer != 'oui'
         with:
           python-version: "3.12"
 
       - run: pip install -r requirements.txt
+        if: steps.heure.outputs.passer != 'oui' && steps.deja.outputs.passer != 'oui'
 
-      # Une panne de l'API ne bloque pas la chaîne : l'étape est marquée en échec (visible dans
-      # l'onglet Actions), mais le résumé et le commit tournent quand même sur ce qui a été collecté.
+      # Une panne de France Travail ne bloque pas la chaîne : les autres sources, le résumé et le commit
+      # tournent quand même. Mais elle n'est plus silencieuse : la dernière étape met le lancement en rouge.
       - name: Extraire les offres France Travail
+        id: ft
+        if: steps.heure.outputs.passer != 'oui' && steps.deja.outputs.passer != 'oui'
         continue-on-error: true
         env:
           FT_CLIENT_ID: ${{ secrets.FT_CLIENT_ID }}
           FT_CLIENT_SECRET: ${{ secrets.FT_CLIENT_SECRET }}
-        run: python scripts/extraire.py
+        run: |
+          if [ -z "$FT_CLIENT_ID" ] || [ -z "$FT_CLIENT_SECRET" ]; then
+            echo "::error::Secrets FT_CLIENT_ID / FT_CLIENT_SECRET absents de ce dépôt (Settings -> Secrets and variables -> Actions). Un dépôt copié (fork) n'hérite pas des secrets de l'original."
+            exit 1
+          fi
+          # l'API France Travail flanche parfois quelques minutes : trois essais, cinq minutes d'écart
+          for essai in 1 2 3; do
+            if python scripts/extraire.py; then exit 0; fi
+            echo "Extraction en échec (essai $essai sur 3)"
+            if [ "$essai" -lt 3 ]; then sleep 300; fi
+          done
+          echo "::error::Extraction France Travail en échec après trois essais : identifiants refusés ou API indisponible (voir le journal de cette étape)."
+          exit 1
 
       # Les autres sources : une source sans clé est ignorée, une source en panne n'arrête rien.
       - name: Extraire les autres sources (La bonne alternance, Adzuna, Jooble)
+        if: steps.heure.outputs.passer != 'oui' && steps.deja.outputs.passer != 'oui'
         continue-on-error: true
         env:
           LBA_API_KEY: ${{ secrets.LBA_API_KEY }}
@@ -44,12 +109,21 @@ jobs:
         run: python scripts/autres_sources.py
 
       - name: Refaire le résumé
+        if: steps.heure.outputs.passer != 'oui' && steps.deja.outputs.passer != 'oui'
         run: python scripts/resumer.py
 
       - name: Enregistrer la donnée du jour (commit + push)
+        if: steps.heure.outputs.passer != 'oui' && steps.deja.outputs.passer != 'oui'
         run: |
           git config user.name "veille-bot"
           git config user.email "actions@github.com"
           git add data
-          git commit -m "veille : offres du $(date -u +%Y-%m-%d)" || echo "rien de nouveau"
+          git commit -m "veille : offres du $(date +%F)" || echo "rien de nouveau"
+          git pull --rebase   # un commit a pu arriver pendant la collecte
           git push
+
+      - name: Signaler l'échec de France Travail
+        if: steps.ft.outcome == 'failure'
+        run: |
+          echo "::error::Les offres France Travail n'ont pas été mises à jour aujourd'hui : le site garde celles de la dernière extraction réussie."
+          exit 1
