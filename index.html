@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-<link rel="stylesheet" href="assets/commun.css?v=8">
+<link rel="stylesheet" href="assets/commun.css?v=9">
 </head>
 <body>
 <main>
@@ -27,7 +27,9 @@
 
   <!-- ============ 3. OÙ SONT LES OFFRES ============ -->
   <h2>Où sont les offres</h2>
-  <div class="carte large"><h3>Carte des offres d'emploi <small>— chaque point est une offre : survolez pour la lire, cliquez pour l'ouvrir</small></h3>
+  <div class="carte large" id="carte-offres"><h3>Carte des offres d'emploi <small>— chaque point est une offre : survolez pour la lire, cliquez pour l'ouvrir ou ne garder que sa ville</small></h3>
+    <!-- Région et ville : la localisation choisie ici restreint tous les graphiques du site. -->
+    <div id="lieu-ici"></div>
     <div class="carte-outils">
       <button data-vue="france">France</button>
       <button data-vue="clermont">Clermont</button>
@@ -60,10 +62,10 @@
   <footer id="pied"></footer>
 </main>
 
-<script src="assets/commun.js?v=8"></script>
+<script src="assets/commun.js?v=9"></script>
 <script>
 /* ============ Accueil : chiffres, carte, départements, contrats ============ */
-let carte, calque;
+let carte, calque, epinglee = null, dernierLieu = "", premierRendu = true;
 
 function rendre(offres, D) {
   const lib = Commun.lib;
@@ -94,13 +96,27 @@ function rendre(offres, D) {
   let places = 0;
   for (const o of offres) {
     if (o.lat == null) continue;
-    places++;
     const m = L.circleMarker([o.lat, o.lon], { radius: 6, color: "#fff", weight: 1, fillColor: couleurMetier(o.rome), fillOpacity: o.prec === "departement" ? .45 : .9 });
-    m.bindPopup(`<b>${o.intitule}</b>${o.entreprise || "employeur non précisé"} · ${o.lieu || ""}<br>${libContratOffre(o)}${salaireCourt(o) ? " · " + salaireCourt(o) : ""}<br><span style="color:#888">${libSource(o)} · ${(lib[o.rome] && lib[o.rome].libelle) || o.rome} · ${libNiv(niv(o))}${o.prec !== "offre" ? " · position : " + o.prec : ""}</span>`, { closeButton: false });
-    m.on("mouseover", function () { this.openPopup(); });
-    m.on("mouseout", function () { this.closePopup(); });
-    if (o.url) m.on("click", () => window.open(o.url, "_blank", "noopener"));
+    // Bulle : survol = lecture ; clic = la bulle reste ouverte, avec « ouvrir l'annonce » et « ne voir que cette ville ».
+    const v = o._ville && Commun.villes.get(o._ville);
+    const actions = (o.url ? `<a href="${o.url}" target="_blank" rel="noopener">Ouvrir l'annonce ↗</a>` : "")
+      + (v && !(Commun.lieu && Commun.lieu.cle === v.cle) ? `<button type="button" data-ville="${v.cle}">Ne voir que ${v.nom}</button>` : "");
+    m.bindPopup(`<b>${o.intitule}</b>${o.entreprise || "employeur non précisé"} · ${o.lieu || ""}<br>${libContratOffre(o)}${salaireCourt(o) ? " · " + salaireCourt(o) : ""}<br><span style="color:#888">${libSource(o)} · ${(lib[o.rome] && lib[o.rome].libelle) || o.rome} · ${libNiv(niv(o))}${o.prec !== "offre" ? " · position : " + o.prec : ""}</span>`
+      + (actions ? `<div class="bulle-actions">${actions}</div>` : ""), { closeButton: false, autoPan: false });
+    m.on("mouseover", function () { if (epinglee !== this) this.openPopup(); });
+    m.on("mouseout", function () { if (epinglee !== this) this.closePopup(); });
+    m.on("click", function () { epinglee = this; this.openPopup(); });
     calque.addLayer(m);
+    places++;
+  }
+  // La carte se recentre quand la localisation change : sur ses offres, ou sur la France entière.
+  // Au premier affichage sans localisation, elle garde sa vue d'ouverture (Auvergne-Rhône-Alpes).
+  const cleLieu = Commun.lieu ? Commun.lieu.type + ":" + Commun.lieu.cle : "";
+  if (cleLieu !== dernierLieu || premierRendu) {
+    const pts = offres.filter(o => o.lat != null).map(o => [o.lat, o.lon]);
+    if (Commun.lieu && pts.length) carte.flyToBounds(L.latLngBounds(pts).pad(.15), { maxZoom: Commun.lieu.type === "ville" ? 12 : 9, duration: premierRendu ? 0 : .6 });
+    else if (!premierRendu) carte.flyTo(...VUES.france);
+    dernierLieu = cleLieu; premierRendu = false;
   }
   document.getElementById("note-carte").textContent =
     `${places} offres placées, ${n - places} sans lieu précis (« France », « Île-de-France »…). Les chiffres sont des grappes : cliquez pour zoomer, molette ou boutons pour naviguer. Point pâle : placé au centre du département.`;
@@ -149,6 +165,12 @@ calque = L.markerClusterGroup({
   iconCreateFunction: c => { const k = c.getChildCount(), t = k < 10 ? "petite" : k < 100 ? "moyenne" : "grande", dia = k < 10 ? 28 : k < 100 ? 36 : 46;
     return L.divIcon({ html: `<div class="grappe ${t}" style="width:${dia}px;height:${dia}px">${k}</div>`, className: "", iconSize: [dia, dia] }); }
 }).addTo(carte);
+carte.on("popupclose", e => { if (epinglee && epinglee.getPopup() === e.popup) epinglee = null; });
+// « Ne voir que [ville] », dans une bulle : la ville devient la localisation active du site.
+document.getElementById("map").addEventListener("click", e => {
+  const b = e.target.closest("[data-ville]");
+  if (b) { carte.closePopup(); choisirLieu({ type: "ville", cle: b.dataset.ville }); }
+});
 document.querySelectorAll("[data-vue]").forEach(b => b.addEventListener("click", () => carte.flyTo(...VUES[b.dataset.vue])));
 document.querySelectorAll("[data-fond]").forEach(b => b.addEventListener("click", () => {
   Object.values(FONDS).forEach(fo => carte.removeLayer(fo)); FONDS[b.dataset.fond].addTo(carte);

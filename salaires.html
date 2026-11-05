@@ -6,7 +6,7 @@
 <title>Rémunération — les métiers du marketing</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-<link rel="stylesheet" href="assets/commun.css?v=8">
+<link rel="stylesheet" href="assets/commun.css?v=9">
 </head>
 <body>
 <main>
@@ -32,7 +32,8 @@
         <div class="zone"><canvas id="g-paie-metier"></canvas></div><p class="src" id="s-paie-metier"></p></div>
       <div class="carte"><h3><span id="t-paie-contrat">Salaire annuel brut selon le type de contrat</span> <small>— CDI, CDD et intérim ; de la médiane des salaires minimum à celle des maximum, même échelle que le graphique voisin</small></h3>
         <div class="zone"><canvas id="g-paie-contrat"></canvas></div><p class="src" id="s-paie-contrat"></p></div>
-      <div class="carte"><h3><span id="t-paie-idf">Salaire annuel brut selon le territoire</span> <small>— Île-de-France, Puy-de-Dôme, reste de la France et offres sans lieu précis ; de la médiane des salaires minimum à celle des maximum</small></h3>
+      <div class="carte"><h3><span id="t-paie-idf">Salaire annuel brut selon le territoire</span> <small>— en foncé, la localisation choisie (référence) ; dessous, les régions cochées pour comparer. Ce graphique ignore le filtre de lieu, pas les autres filtres.</small></h3>
+        <div class="comparer" id="comparer-regions" role="group" aria-label="Régions à comparer"></div>
         <div class="zone"><canvas id="g-paie-idf"></canvas></div>
         <p class="src" id="s-paie-idf"></p></div>
       <div class="carte large"><h3>Les offres du Puy-de-Dôme qui affichent un salaire <small id="nb-paie-63"></small></h3>
@@ -54,16 +55,17 @@
   <footer id="pied"></footer>
 </main>
 
-<script src="assets/commun.js?v=8"></script>
+<script src="assets/commun.js?v=9"></script>
 <script>
 /* ============ Ce que ça paie ============ */
-let volet = "emplois";
+let volet = "emplois", emploisTousLieux = [];
 
-function rendre(offres, D) {
+function rendre(offres, D, tousLieux) {
   const lib = Commun.lib, f = Commun.f;
   // Deux populations lues à part : emplois d'un côté, stages et alternances de l'autre.
   const etude = o => { const k = familleContrat(o); return k === "stage" || k === "alt"; };
   const emplois = offres.filter(o => !etude(o)), etudes = offres.filter(etude);
+  emploisTousLieux = (tousLieux || offres).filter(o => !etude(o));
   document.getElementById("nb-emplois").textContent = nombre(emplois.length);
   document.getElementById("nb-etudes").textContent = nombre(etudes.length);
   document.getElementById("volet-emplois").hidden = volet !== "emplois";
@@ -110,22 +112,28 @@ function rendreEmplois(offres, lib, f) {
     const lot = avecSal.filter(o => familleContrat(o) === k);
     return { k, label: l, n: lot.length, paire: fourchette(lot), faible: lot.length < nFaible };
   }).filter(x => x.paire && x.n >= 3);
-  // Quatre territoires, sans recouvrement : chaque offre avec salaire tombe dans une seule ligne.
-  // Le Puy-de-Dôme et « Lieu non précisé » sont toujours affichés, même avec très peu d'offres.
   const lot63 = avecSal.filter(o => o.dep === "63").sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-  const parLieu = [
-    { k: "idf", label: "Île-de-France", lot: avecSal.filter(o => IDF.has(o.dep)) },
-    { k: "pdd", label: "Puy-de-Dôme", lot: lot63, toujours: true },
-    { k: "reste", label: ["Reste de la France", "hors IDF et Puy-de-Dôme"], lot: avecSal.filter(o => o.dep && o.dep !== "63" && !IDF.has(o.dep)) },
-    { k: "inconnu", label: ["Lieu non précisé", "France, région, étranger…"], lot: avecSal.filter(o => !o.dep), toujours: true },
-  ].map(x => ({ k: x.k, label: x.label, n: x.lot.length, paire: fourchette(x.lot), faible: x.lot.length < nFaible, toujours: x.toujours,
-      teinte: x.k === "pdd" ? "#7a0f45" : x.k === "inconnu" ? GRIS : couleur }))
-    .filter(x => x.toujours || (x.paire && x.n >= 3));
+  // Territoires : ce graphique est un comparateur, il n'est PAS restreint à la localisation active.
+  // Ligne de référence = la localisation choisie (ou la France entière), puis les régions cochées.
+  const salTous = emploisTousLieux.filter(o => o.smin != null);
+  const ref = Commun.lieu;
+  const lignesLieu = [{ k: "ref", label: [libLieu(ref), ref ? "référence (lieu choisi)" : "référence"], lot: salTous.filter(o => lieuOk(o, ref)), teinte: "#7a0f45" }];
+  if (ref) lignesLieu.push({ k: "france", label: "France entière", lot: salTous, teinte: GRIS });
+  Commun.comparaison.filter(r => !(ref && ref.type === "region" && ref.cle === r))
+    .forEach(r => lignesLieu.push({ k: r, label: r, lot: salTous.filter(o => o._region === r), teinte: couleur }));
+  const parLieu = lignesLieu.map(x => ({ k: x.k, label: x.label, n: x.lot.length, paire: fourchette(x.lot), faible: x.lot.length < nFaible, teinte: x.teinte }));
+  // Les cases de comparaison : une par région, avec son nombre d'offres affichant un salaire.
+  const nReg = new Map(compter(salTous, o => o._region));
+  document.getElementById("comparer-regions").innerHTML = NOMS_REGIONS.map(r => {
+    const estRef = ref && ref.type === "region" && ref.cle === r;
+    return `<label${estRef ? ' class="ref" title="Localisation choisie : déjà la référence"' : ""}><input type="checkbox" value="${r}" ${estRef || Commun.comparaison.includes(r) ? "checked" : ""} ${estRef ? "disabled" : ""}> ${r} <small>${nombre(nReg.get(r) || 0)}</small></label>`;
+  }).join("");
   const echelle = bornes([...parContrat, ...parLieu].map(x => x.paire));
   flottantes("g-paie-contrat", parContrat, echelle);
   flottantes("g-paie-idf", parLieu, Object.assign({ parBarre: etroit ? 72 : 52 }, echelle));
   source("s-paie-contrat", avecSal.filter(o => ["cdi", "cdd", "mis"].includes(familleContrat(o))), "offres affichant un salaire");
-  source("s-paie-idf", avecSal, "offres affichant un salaire");
+  // La ligne « France entière » (ou la référence nationale) porte toutes les offres : n = toutes celles qui affichent un salaire.
+  source("s-paie-idf", salTous, "offres affichant un salaire, toutes localisations : ce graphique ignore le filtre de lieu");
 
   // Les offres du Puy-de-Dôme elles-mêmes : peu nombreuses, on peut toutes les lire.
   document.getElementById("nb-paie-63").textContent = `— ${pluriel(lot63.length)}, de la plus récente à la plus ancienne`;
@@ -176,6 +184,10 @@ function rendreEtudes(offres) {
   source("s-paie-alt", altSal, "offres en alternance affichant une rémunération");
 }
 
+// Cocher ou décocher une région à comparer : mémorisé, et suivi d'une visite à l'autre.
+document.getElementById("comparer-regions").addEventListener("change", () => {
+  choisirComparaison([...document.querySelectorAll("#comparer-regions input:checked:not(:disabled)")].map(i => i.value));
+});
 document.querySelectorAll("[data-volet]").forEach(b => b.addEventListener("click", () => {
   volet = b.dataset.volet;
   document.querySelectorAll("[data-volet]").forEach(x => x.setAttribute("aria-selected", x === b));

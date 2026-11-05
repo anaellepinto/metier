@@ -85,6 +85,91 @@ function depDe(o) {
 }
 const libDep = code => DEPARTEMENTS[code] ? `${DEPARTEMENTS[code]} (${code})` : (code === "97" ? "Outre-mer (97)" : code);
 
+/* ============================================================
+   LOCALISATION : région et ville de chaque offre
+   ============================================================ */
+/* Les régions (découpage de 2016), par leurs départements ; l'outre-mer est regroupé. */
+const REGIONS = {
+  "Auvergne-Rhône-Alpes": [...AURA],
+  "Bourgogne-Franche-Comté": ["21", "25", "39", "58", "70", "71", "89", "90"],
+  "Bretagne": ["22", "29", "35", "56"],
+  "Centre-Val de Loire": ["18", "28", "36", "37", "41", "45"],
+  "Corse": ["2A", "2B", "20"],
+  "Grand Est": ["08", "10", "51", "52", "54", "55", "57", "67", "68", "88"],
+  "Hauts-de-France": ["02", "59", "60", "62", "80"],
+  "Île-de-France": [...IDF],
+  "Normandie": ["14", "27", "50", "61", "76"],
+  "Nouvelle-Aquitaine": ["16", "17", "19", "23", "24", "33", "40", "47", "64", "79", "86", "87"],
+  "Occitanie": ["09", "11", "12", "30", "31", "32", "34", "46", "48", "65", "66", "81", "82"],
+  "Pays de la Loire": ["44", "49", "53", "72", "85"],
+  "Provence-Alpes-Côte d'Azur": ["04", "05", "06", "13", "83", "84"],
+  "Outre-mer": ["97", "971", "972", "973", "974", "975", "976", "977", "978"],
+};
+const NOMS_REGIONS = Object.keys(REGIONS);
+const REGION_DU_DEP = Object.fromEntries(Object.entries(REGIONS).flatMap(([r, deps]) => deps.map(d => [d, r])));
+const regionDe = o => REGION_DU_DEP[depDe(o)] || null;
+
+/* « Saint-Étienne » -> « saint etienne » : la clé de comparaison d'un nom de lieu. */
+const normaliser = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+  .replace(/['’]/g, " ").replace(/[^a-z0-9]+/g, " ").replace(/\bst\b/g, "saint").replace(/\bste\b/g, "sainte").trim();
+/* Ce qui n'est pas une ville : pays, régions, départements. */
+const PAS_UNE_VILLE = new Set(["france", "ile de france", "idf", "france entiere", "teletravail", "a distance",
+  ...NOMS_REGIONS.map(normaliser), ...Object.values(DEPARTEMENTS).map(normaliser).filter(n => n !== "paris")]);  // Paris : ville ET département
+/* « ROYE » -> « Roye », « SAINT-LEU-LA-FORET » -> « Saint-Leu-La-Foret » ; un nom déjà en casse mixte est gardé. */
+const casseVille = s => s !== s.toUpperCase() ? s : s.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (_, a, b) => a + b.toUpperCase());
+
+/* La ville d'une offre, lue dans son champ « lieu », écrit de dix façons selon la source :
+   « 63 - CLERMONT-FERRAND », « 75001 Paris », « Paris 9e Arrondissement », « 1er Arrondissement, Paris »,
+   « 322 RUE DES PYRENEES 75020 PARIS », « Lyon, Rhône »… Renvoie { cle, nom } ou null.
+   La clé porte le département : Saint-Denis (93) et Saint-Denis (974) restent deux villes. */
+function villeDe(o) {
+  const dep = depDe(o);
+  if (!dep || !o.lieu) return null;
+  let s = String(o.lieu).replace(/^\s*(\d{2,3}|2A|2B)\s*-\s*/i, "");
+  const cp = /\b\d{5}\s+([^,]+)$/.exec(s);                                   // « … 75020 PARIS » -> « PARIS »
+  if (cp) s = cp[1];
+  const morceaux = s.split(/[,(]/).map(x => x.replace(/\)/g, "")
+    .replace(/\b\d+\s*(er|e|eme|ème)?[\s-]*arrondissement\b/gi, "").replace(/[\s-]*\barrondissement\b/gi, "").replace(/\b\d+\s*(er|e|eme|ème)\b/gi, "").replace(/\bcedex\b.*$/i, "").replace(/\b\d+\b/g, "").replace(/^[\s-]+|[\s-]+$/g, "").trim())
+    .filter(x => x && !PAS_UNE_VILLE.has(normaliser(x)));
+  if (!morceaux.length) return null;
+  const nom = morceaux[0], n = normaliser(nom);
+  if (!n || n.length < 2 || /\b(rue|avenue|boulevard|bd|chemin|place|allee|route)\b/.test(n)) return null;
+  return { cle: dep + "|" + n, nom: casseVille(nom) };
+}
+
+/* L'index des villes, bâti une fois au chargement : clé -> { cle, nom, dep, region, n }.
+   Le nom affiché est la graphie la plus fréquente de la ville. */
+function indexerLieux(offres) {
+  const villes = new Map(), graphies = new Map();
+  for (const o of offres) {
+    o._region = regionDe(o);
+    const v = villeDe(o);
+    o._ville = v ? v.cle : null;
+    if (!v) continue;
+    if (!villes.has(v.cle)) { villes.set(v.cle, { cle: v.cle, nom: v.nom, dep: depDe(o), region: o._region, n: 0 }); graphies.set(v.cle, new Map()); }
+    villes.get(v.cle).n++;
+    const g = graphies.get(v.cle); g.set(v.nom, (g.get(v.nom) || 0) + 1);
+  }
+  for (const [cle, g] of graphies) villes.get(cle).nom = [...g].sort((a, b) => b[1] - a[1])[0][0];
+  return villes;
+}
+
+/* La localisation active : null (toute la France), { type: "region", cle } ou { type: "ville", cle }. */
+const lieuOk = (o, lieu) => !lieu || (lieu.type === "region" ? o._region === lieu.cle : o._ville === lieu.cle);
+function libLieu(lieu) {
+  if (!lieu) return "France entière";
+  if (lieu.type === "region") return lieu.cle;
+  const v = Commun.villes.get(lieu.cle);
+  return v ? `${v.nom} (${v.dep})` : lieu.cle.split("|").pop();
+}
+/* Une localisation mémorisée qui n'existe plus dans les données (ville disparue) est oubliée. */
+function lieuValide(lieu) {
+  if (!lieu || !lieu.cle) return null;
+  if (lieu.type === "region") return REGIONS[lieu.cle] ? lieu : null;
+  if (lieu.type === "ville") return Commun.villes.has(lieu.cle) ? lieu : null;
+  return null;
+}
+
 /* Milliers d'euros, une décimale au plus : 22 800 -> « 22,8 », 40 000 -> « 40 ». */
 const kilo = v => (Math.round(v / 100) / 10).toLocaleString("fr-FR");
 const plage = (a, b) => Math.round(a / 100) === Math.round(b / 100) ? `${kilo(a)} k€` : `${kilo(a)} – ${kilo(b)} k€`;
@@ -306,13 +391,99 @@ function etatFiltres() {
   // Le filtre des sources n'est affiché que s'il y en a plusieurs : masqué, il laisse tout passer.
   const bloc = document.getElementById("bloc-sources");
   const sources = bloc && !bloc.hidden ? cochees("#f-sources") : null;
-  return { metiers: cochees("#metiers"), contrats: cochees("#f-contrats"), niveaux: cochees("#f-niveaux"), sources };
+  return { metiers: cochees("#metiers"), contrats: cochees("#f-contrats"), niveaux: cochees("#f-niveaux"), sources, lieu: Commun.lieu };
 }
-/* Les offres retenues par les filtres. */
+/* Les offres retenues par les filtres : [localisation active] ET [tous les autres critères].
+   Sans localisation (f.lieu null), c'est la vue nationale. */
 function filtrer(f) {
   f = f || etatFiltres();
   return D.offres.filter(o => f.metiers.has(o.rome) && f.contrats.has(familleContrat(o)) && f.niveaux.has(niv(o))
-    && (!f.sources || f.sources.has(sourceDe(o))));
+    && (!f.sources || f.sources.has(sourceDe(o))) && lieuOk(o, f.lieu));
+}
+
+/* ============================================================
+   3 bis) LOCALISATION PARTAGÉE ENTRE LES PAGES
+   Commun.lieu : la localisation active ; Commun.comparaison : les
+   régions que le graphique « salaire selon le territoire » met en
+   regard. Les deux sont mémorisées et suivent d'une page à l'autre.
+   ============================================================ */
+const CLE_LIEU = "metiers-lieu", CLE_COMPARAISON = "metiers-comparaison";
+const COMPARAISON_DEFAUT = ["Île-de-France", "Auvergne-Rhône-Alpes"];
+function lireStockage(cle) { try { return JSON.parse(localStorage.getItem(cle)); } catch (e) { return null; } }
+function ecrireStockage(cle, v) { try { localStorage.setItem(cle, JSON.stringify(v)); } catch (e) {} }
+
+/* Change la localisation active, la mémorise et redessine la page. null = toute la France. */
+function choisirLieu(lieu) {
+  Commun.lieu = lieuValide(lieu);
+  ecrireStockage(CLE_LIEU, Commun.lieu);
+  majSelecteurLieu();
+  Commun.rafraichir();
+}
+function choisirComparaison(regions) {
+  Commun.comparaison = regions.filter(r => REGIONS[r]);
+  ecrireStockage(CLE_COMPARAISON, Commun.comparaison);
+  Commun.rafraichir();
+}
+
+/* Le bandeau « Lieu : … ✕ », sous les filtres de chaque page : la restriction ne passe jamais inaperçue. */
+function majBandeauLieu() {
+  const b = document.getElementById("bandeau-lieu");
+  if (!b) return;
+  b.hidden = !Commun.lieu;
+  if (!Commun.lieu) return;
+  b.innerHTML = `<span>📍 Lieu : <b>${libLieu(Commun.lieu)}</b> — tous les graphiques ne montrent que ces offres${PAGE_ICI === "salaires.html" ? ", sauf le comparatif par territoire" : PAGE_ICI === "mouvement.html" ? ", sauf les entrées et sorties (le journal des extractions ne note pas le lieu)" : ""}.</span>`
+    + (PAGE_ICI === "index.html" ? "" : ` <a href="index.html#lieu">Changer</a>`)
+    + ` <button type="button" data-lieu-effacer>✕ Toute la France</button>`;
+}
+
+/* Les deux sélecteurs liés de l'accueil : Région, puis Ville (restreinte à la région choisie,
+   sinon recherche dans toute la France). Posés dans un conteneur de la page, s'il existe. */
+function poserSelecteurLieu() {
+  const ici = document.getElementById("lieu-ici");
+  if (!ici) return;
+  ici.innerHTML = `<div class="lieu" id="lieu">
+      <label>Région <select id="f-region"><option value="">Toute la France</option>${NOMS_REGIONS.map(r => `<option value="${r}">${r}</option>`).join("")}</select></label>
+      <label>Ville <input id="f-ville" list="l-villes" placeholder="Rechercher une ville…" autocomplete="off"></label>
+      <datalist id="l-villes"></datalist>
+      <button type="button" data-lieu-effacer>Toute la France</button>
+    </div>`;
+  document.getElementById("f-region").addEventListener("change", e => {
+    choisirLieu(e.target.value ? { type: "region", cle: e.target.value } : null);
+  });
+  const ville = document.getElementById("f-ville");
+  // La liste propose « Nom (dép.) » : on retrouve la ville par ce libellé exact.
+  const valider = () => {
+    const v = [...Commun.villes.values()].find(x => `${x.nom} (${x.dep})` === ville.value.trim());
+    if (v) choisirLieu({ type: "ville", cle: v.cle });
+    else if (!ville.value.trim() && Commun.lieu && Commun.lieu.type === "ville") {
+      // Champ vidé : on revient à la région de la ville, ou à toute la France.
+      const r = document.getElementById("f-region").value;
+      choisirLieu(r ? { type: "region", cle: r } : null);
+    }
+  };
+  ville.addEventListener("change", valider);
+  ville.addEventListener("input", () => { if (Commun.villes && [...Commun.villes.values()].some(x => `${x.nom} (${x.dep})` === ville.value)) valider(); });
+}
+
+/* Remet les sélecteurs d'accord avec Commun.lieu, et la liste des villes avec la région. */
+function majSelecteurLieu() {
+  const reg = document.getElementById("f-region"), ville = document.getElementById("f-ville");
+  if (!reg || !ville) return;
+  const lieu = Commun.lieu;
+  const region = !lieu ? "" : lieu.type === "region" ? lieu.cle : ((Commun.villes.get(lieu.cle) || {}).region || "");
+  reg.value = region;
+  ville.value = lieu && lieu.type === "ville" ? libLieu(lieu) : "";
+  ville.placeholder = region ? `Rechercher une ville en ${region}…` : "Rechercher une ville en France…";
+  const villes = [...Commun.villes.values()].filter(v => !region || v.region === region).sort((a, b) => b.n - a.n || a.nom.localeCompare(b.nom));
+  document.getElementById("l-villes").innerHTML = villes.map(v => `<option value="${v.nom} (${v.dep})">${pluriel(v.n)}</option>`).join("");
+}
+
+/* Le nombre d'offres de chaque région, selon les autres filtres : affiché dans le menu Région. */
+function majComptesRegions(base) {
+  const reg = document.getElementById("f-region");
+  if (!reg) return;
+  const n = new Map(compter(base, o => o._region));
+  [...reg.options].forEach(op => { if (op.value) op.textContent = `${op.value} (${nombre(n.get(op.value) || 0)})`; });
 }
 
 /* ============================================================
@@ -368,7 +539,8 @@ function poserNavEtFiltres() {
     ? `<div class="carte">${HTML_FILTRES}</div>`
     // Ailleurs : replié, on vient lire une page, pas refaire ses filtres.
     : `<details class="carte"><summary id="resume-filtres">Filtres</summary>${HTML_FILTRES}</details>`)
-    + `<div class="vide" id="aucune" hidden>Aucune offre ne correspond à ces filtres. Recochez un métier, un type de contrat, un niveau de poste ou une source.</div>`;
+    + `<div class="bandeau-lieu" id="bandeau-lieu" hidden></div>`
+    + `<div class="vide" id="aucune" hidden>Aucune offre ne correspond à ces filtres. Recochez un métier, un type de contrat, un niveau de poste ou une source, ou revenez à toute la France.</div>`;
 
   const p = document.getElementById("pied");
   if (p) p.innerHTML =
@@ -454,8 +626,7 @@ function poserBarreOnglets() {
   if (!barre) return;
   barre.innerHTML = Commun.onglets.map(o => {
     const codes = new Set(o.groupes.flatMap(g => g.codes));
-    const n = D.offres.filter(x => codes.has(x.rome)).length;
-    return `<button type="button" role="tab" data-onglet="${o.id}" aria-selected="false">${o.titre} <small>${n}</small></button>`;
+    return `<button type="button" role="tab" data-onglet="${o.id}" aria-selected="false">${o.titre} <small></small></button>`;
   }).join("");
   barre.hidden = Commun.onglets.length < 2;
   const choisir = b => { if (b && b.dataset.onglet !== Commun.onglet.id) { poserOnglet(b.dataset.onglet); Commun.rafraichir(); } };
@@ -474,6 +645,9 @@ function poserBarreOnglets() {
    ============================================================ */
 const Commun = {
   D: null,          // les données, une fois chargées
+  lieu: null,       // la localisation active (selectedLocation) : null = toute la France
+  comparaison: [],  // les régions comparées par le graphique des salaires (comparisonLocations)
+  villes: new Map(),// clé de ville -> { cle, nom, dep, region, n }
   f: null,          // l'état des filtres au dernier rendu
   lib: {},          // code ROME -> { libelle, groupe, … }
   onglets: [],      // les onglets du resume.json
@@ -487,19 +661,31 @@ const Commun = {
   rafraichir() {
     const f = etatFiltres();
     Commun.f = f;
-    const parMetier = D.offres.filter(o => f.metiers.has(o.rome));           // base des compteurs de filtres
+    // Base des compteurs de filtres : les métiers cochés, dans la localisation active.
+    const parMetier = D.offres.filter(o => f.metiers.has(o.rome) && lieuOk(o, f.lieu));
     const offres = filtrer(f);
-    const n = offres.length, total = D.offres.filter(o => o.rome in Commun.groupeDe).length;
+    // Les mêmes offres, sans la restriction de lieu : pour le graphique comparatif des salaires.
+    const tousLieux = f.lieu ? filtrer(Object.assign({}, f, { lieu: null })) : offres;
+    const n = offres.length, total = D.offres.filter(o => o.rome in Commun.groupeDe && lieuOk(o, f.lieu)).length;
     const titre = Commun.onglets.length > 1 ? ` « ${Commun.onglet.titre} »` : "";
+    const ou = f.lieu ? ` — ${libLieu(f.lieu)}` : "";
+
+    // Nombre d'offres de chaque onglet, dans la localisation active.
+    document.querySelectorAll("#onglets [data-onglet]").forEach(b => {
+      const o = Commun.onglets.find(x => x.id === b.dataset.onglet), codes = new Set(o.groupes.flatMap(g => g.codes));
+      b.querySelector("small").textContent = D.offres.filter(x => codes.has(x.rome) && lieuOk(x, f.lieu)).length;
+    });
+    majComptesRegions(D.offres.filter(o => f.metiers.has(o.rome) && f.contrats.has(familleContrat(o)) && f.niveaux.has(niv(o)) && (!f.sources || f.sources.has(sourceDe(o)))));
+    majBandeauLieu();
 
     // Compteurs dans les cases de filtre + ligne de synthèse
     CONTRATS.forEach(([k]) => { const e = document.getElementById("nb-c-" + k); if (e) e.textContent = parMetier.filter(o => familleContrat(o) === k).length; });
     NIVEAUX.forEach(([k]) => { const e = document.getElementById("nb-n-" + k); if (e) e.textContent = parMetier.filter(o => niv(o) === k).length; });
     document.querySelectorAll("#f-sources input").forEach(i => { const e = i.parentNode.querySelector("small"); if (e) e.textContent = parMetier.filter(o => sourceDe(o) === i.value).length; });
-    document.getElementById("compte").innerHTML = `<b>${n}</b> offre${n > 1 ? "s" : ""} sélectionnée${n > 1 ? "s" : ""} sur ${total}${titre ? " de l'onglet" + titre : ""} — ${f.metiers.size} métier${f.metiers.size > 1 ? "s" : ""} coché${f.metiers.size > 1 ? "s" : ""}.`;
+    document.getElementById("compte").innerHTML = `<b>${n}</b> offre${n > 1 ? "s" : ""} sélectionnée${n > 1 ? "s" : ""} sur ${total}${titre ? " de l'onglet" + titre : ""}${ou} — ${f.metiers.size} métier${f.metiers.size > 1 ? "s" : ""} coché${f.metiers.size > 1 ? "s" : ""}.`;
     document.getElementById("aucune").hidden = n > 0;
     const resume = document.getElementById("resume-filtres");
-    if (resume) resume.textContent = `Filtres${titre} (${f.metiers.size} métier${f.metiers.size > 1 ? "s" : ""}, ${n} offre${n > 1 ? "s" : ""})`;
+    if (resume) resume.textContent = `Filtres${titre} (${f.metiers.size} métier${f.metiers.size > 1 ? "s" : ""}, ${n} offre${n > 1 ? "s" : ""}${ou})`;
     // Plus rien de sélectionné : le message dit « recochez un métier », le panneau replié
     // doit donc s'ouvrir. Sinon la page réclame une action dont elle cache les cases.
     if (n === 0) { const d = document.querySelector("details.carte"); if (d) d.open = true; }
@@ -509,10 +695,11 @@ const Commun = {
       contrats_vus: CONTRATS.map(x => x[0]), sources: f.sources ? [...f.sources] : undefined };
     try { localStorage.setItem("metiers-filtres", JSON.stringify(Commun.memo)); } catch (e) {}
 
-    Commun.rendre(offres, D);
+    Commun.rendre(offres, D, tousLieux);
   },
 
-  /* rendre(offres, D) : rappelée au chargement puis à chaque changement de filtre.
+  /* rendre(offres, D, tousLieux) : rappelée au chargement puis à chaque changement de filtre.
+     offres : [lieu actif] ET [autres critères] ; tousLieux : les autres critères seuls.
      initier(D) : facultatif, une seule fois, avant le premier rendu. */
   demarrer(rendre, initier) {
     Commun.rendre = rendre;
@@ -561,6 +748,16 @@ const Commun = {
       document.getElementById("f-contrats").addEventListener("change", Commun.rafraichir);
       document.getElementById("f-niveaux").addEventListener("change", Commun.rafraichir);
       document.getElementById("f-sources").addEventListener("change", Commun.rafraichir);
+      // « ✕ Toute la France », dans le bandeau ou près de la carte.
+      document.addEventListener("click", e => { if (e.target.closest("[data-lieu-effacer]")) choisirLieu(null); });
+
+      // --- Localisation : villes indexées une fois, lieu et comparaison mémorisés ---
+      Commun.villes = indexerLieux(d.offres);
+      Commun.lieu = lieuValide(lireStockage(CLE_LIEU));
+      const comp = lireStockage(CLE_COMPARAISON);
+      Commun.comparaison = Array.isArray(comp) ? comp.filter(r => REGIONS[r]) : COMPARAISON_DEFAUT;
+      poserSelecteurLieu();
+      majSelecteurLieu();
 
       // --- Onglets : le dernier consulté, sinon le premier ---
       Commun.onglets = ongletsDe(d);

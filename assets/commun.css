@@ -125,3 +125,21 @@ a.lien span i { font-style:normal; color:var(--accent); font-weight:600; }
 @media (max-width:560px) { .chaleur { font-size:.74rem; border-spacing:2px; } .chaleur td { min-width:38px; padding:6px 1px; } .chaleur th { padding:4px 2px; } .chaleur th[scope=row] { white-space:normal; padding-right:4px; } }
 /* Bandeau d'alerte sous le titre : une source n'a pas été collectée depuis plusieurs jours. */
 .alerte { display:block; margin-top:8px; padding:8px 12px; border-radius:8px; background:#fff4e5; color:#8a4b00; font-weight:600; }
+
+/* ---- Localisation partagée : sélecteurs de l'accueil, bandeau de chaque page, comparatif ---- */
+.lieu { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin:0 0 12px; padding:12px; background:var(--fond); border-radius:10px; }
+.lieu label { display:flex; flex-direction:column; gap:4px; font-size:.8rem; color:var(--gris); flex:1 1 220px; min-width:0; }
+.lieu select, .lieu input { font:inherit; font-size:.95rem; color:var(--encre); padding:7px 10px; border:1px solid var(--trait); border-radius:8px; background:var(--carte); width:100%; }
+.lieu select:focus, .lieu input:focus { outline:2px solid var(--accent); outline-offset:-1px; }
+.lieu button, .bandeau-lieu button { font:inherit; font-size:.85rem; padding:7px 12px; border:1px solid var(--trait); border-radius:8px; background:var(--carte); cursor:pointer; }
+.lieu button:hover, .bandeau-lieu button:hover { border-color:var(--accent); color:var(--accent); }
+.bandeau-lieu { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:12px 0 0; padding:10px 14px; border:1px solid var(--accent); border-radius:10px; background:#fdf0f6; font-size:.92rem; }
+.bandeau-lieu a { color:var(--accent); }
+.bandeau-lieu button { padding:3px 10px; }
+.comparer { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 10px; }
+.comparer label { display:inline-flex; align-items:center; gap:4px; font-size:.8rem; padding:3px 10px; border:1px solid var(--trait); border-radius:99px; cursor:pointer; user-select:none; }
+.comparer label:has(input:checked) { border-color:var(--accent); color:var(--accent); background:#fdf0f6; }
+.comparer input { margin:0; accent-color:var(--accent); }
+.comparer label.ref { border-color:#7a0f45; color:#fff; background:#7a0f45; cursor:default; }
+.bulle-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+.bulle-actions a, .bulle-actions button { font:inherit; font-size:.8rem; padding:2px 8px; border:1px solid var(--accent); border-radius:6px; color:var(--accent); background:#fff; cursor:pointer; text-decoration:none; }
