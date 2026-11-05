@@ -80,12 +80,25 @@ LIBELLES = {
     "N1202": "Gestion des opérations de circulation internationale des marchandises",
     "M1302": "Direction de petite ou moyenne entreprise",
     "M1402": "Conseil en organisation et management d'entreprise",
+    "D1403": "Relation commerciale auprès de particuliers",
+    "D1501": "Animation de vente",
+    "M1701": "Administration des ventes",
+    "N1201": "Affrètement transport",
+    "N1301": "Conception et organisation de la chaîne logistique",
+    "M1301": "Direction de grande entreprise ou d'établissement public",
     # Magasin et grande distribution (onglet Retail)
     "D1301": "Management de magasin de détail",
     "D1509": "Management de département en grande distribution",
     "D1502": "Management/gestion de rayon produits alimentaires",
     "D1503": "Management/gestion de rayon produits non alimentaires",
     "D1508": "Encadrement du personnel de caisses",
+    "D1504": "Direction de magasin de grande distribution",
+    "D1505": "Personnel de caisse",
+    "D1507": "Mise en rayon libre-service",
+    "D1214": "Vente en habillement et accessoires de la personne",
+    "D1212": "Vente en décoration et équipement du foyer",
+    "D1211": "Vente en articles de sport et loisirs",
+    "D1106": "Vente en alimentation",
 }
 
 # Les onglets du site : identifiant -> (titre, groupes). Chaque groupe : nom -> (codes, coché par défaut).
@@ -97,15 +110,16 @@ ONGLETS = {
         "Frontière": (["E1112", "E1103", "E1107", "E1404", "D1506", "D1415"], False),
     }),
     "dcib": ("DCIB", {
-        "Commercial": (["M1707", "D1402", "D1406", "D1407", "D1401", "M1704"], True),
-        "Achats & international": (["M1101", "M1102", "N1202"], True),
+        "Commercial": (["M1707", "D1402", "D1406", "D1407", "D1401", "M1704", "D1403", "D1501", "M1701"], True),
+        "Achats, logistique & international": (["M1101", "M1102", "N1202", "N1201", "N1301"], True),
         "Marketing & produit": (["M1705", "M1703"], True),
-        "Direction & conseil": (["M1302", "M1402"], True),
+        "Direction & conseil": (["M1302", "M1402", "M1301"], True),
     }),
     "retail": ("Retail", {
-        "Magasin & grande distribution": (["D1301", "D1509", "D1502", "D1503", "D1508", "D1506"], True),
+        "Magasin & grande distribution": (["D1301", "D1504", "D1509", "D1502", "D1503", "D1508", "D1506"], True),
+        "Vente spécialisée & caisse": (["D1214", "D1212", "D1211", "D1106", "D1505", "D1507"], False),
         "Commerce & marketing": (["D1406", "M1704", "M1705", "M1706", "M1703", "M1707"], True),
-        "Achats & direction": (["M1101", "M1302"], True),
+        "Achats & direction": (["M1101", "M1302", "N1301"], True),
     }),
 }
 

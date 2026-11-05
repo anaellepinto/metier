@@ -68,6 +68,13 @@ MOTS_CLES = {
     "D1301": "responsable de magasin", "D1509": "chef de département grande distribution",
     "D1502": "manager rayon alimentaire", "D1503": "chef de rayon",
     "D1508": "responsable de caisses",
+    "D1403": "conseiller commercial", "D1501": "animateur des ventes",
+    "M1701": "administration des ventes", "N1201": "affréteur",
+    "N1301": "supply chain", "M1301": "directeur général",
+    "D1504": "directeur de magasin", "D1505": "hôte de caisse",
+    "D1507": "employé de libre-service", "D1214": "vendeur prêt-à-porter",
+    "D1212": "vendeur décoration", "D1211": "vendeur articles de sport",
+    "D1106": "vendeur en alimentation",
 }
 
 MOTIF_ALTERNANCE = re.compile(r"alternan|apprenti|contrat pro", re.IGNORECASE)
